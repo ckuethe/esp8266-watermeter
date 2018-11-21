@@ -22,9 +22,7 @@ The watermeter is based on micropython with a customized set of frozen modules. 
 1. Connect to the ESP8266 over its serial console
 1. `import watermeter`
 1. `watermeter.netconfig('your-wifi-ssid-here', 'your-wifi-password-here)`
-1. `watermeter.install_and_reboot()
-
-`
+1. `watermeter.install_and_reboot()`
 
 #### Removed Modules
 - apa102
