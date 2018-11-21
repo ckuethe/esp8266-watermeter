@@ -63,14 +63,15 @@ def calculate_broadcast(ip, nm):
     bcast_host = inet_pton('255.255.255.255') & ~inet_pton(nm)
     return inet_ntop(netaddr+bcast_host)
 
-def discovery_msg(_=None):
+def send_adv_msg(_=None):
     global net
     global port
     i = net.ifconfig()
     dst = calculate_broadcast(i[0], i[1])
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.sendto('watermeter running on http://{}:{}'.format(i[0],port), (dst, port))
-    del s
+    n = s.sendto('watermeter running on http://{}:{}'.format(i[0],port), (dst, port))
+    s.close()
+    logging.info('advertised {}:{}'.format(i[0], port))
 
 def ntp_sync(_=None):
     # this function is called once an hour by a periodic timer to do two
@@ -263,9 +264,9 @@ def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True):
 
     if do_netadv:
         logging.info('starting device announcement task')
-        discovery_msg()
-        _discovery_timer = Timer(-1)
-        _discovery_timer.init(period=30_000, mode=Timer.PERIODIC, callback=discovery_msg)
+        send_adv_msg()
+        _adv_timer = Timer(-1)
+        _adv_timer.init(period=30_000, mode=Timer.PERIODIC, callback=send_adv_msg)
 
 
     load_state()
