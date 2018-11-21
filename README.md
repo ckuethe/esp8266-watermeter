@@ -7,6 +7,9 @@ This is a simple ESP8266 powered water flow sensor. A typical use case might be 
 
 Pretty simple, really. Take one NodeMCU, connect the 3.3V regulated output pin to Vcc (red wire) on a hall effect sensor. Ground pin to GND (black wire). GPIO4 (it happens to be D2 on my board) to OUT (yellow wire) on the sensor. That's it. The circuit toggles one of the on-board LEDs whenever a pulse arrives from the sensor but that's purely eye-candy.
 
+![Actual Device](https://raw.githubusercontent.com/ckuethe/esp8266-watermeter/master/device.jpg)
+
+![Schematic](https://raw.githubusercontent.com/ckuethe/esp8266-watermeter/master/schematic.jpg)
 
 ## Firmware
 The watermeter is based on micropython with a customized set of frozen modules. This is necessary due to the limited amount of memory available for runtime compilation of modules on the file system, the fact that not all the modules are available to be installed with upip, and an upper bound on flash image size prevents me from just shipping all of `micropython-lib` as frozen modules. As recommended by the documentation, the water meter application is in a single module which can be imported and then invoked by `main()`
