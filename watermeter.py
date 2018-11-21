@@ -234,20 +234,27 @@ def install_and_reboot():
     os.rename('watermeter.py', 'main.py')
     reset()
 
-def netconfig(ssid, password):
+def netconfig(ssid=None, password=None):
+    if ssid is None:
+        ssid = input('SSID? ')
+        password = input('Password? ')
+        if password == '':
+            password = None
     net.connect(ssid, password)
-    ipfail = True
+
+    ip = None
     for _ in range(30):
         time.sleep(1)
         i = net.ifconfig()
         if i[0] != '0.0.0.0':
-            ipfail = True
+            ip = i[0]
             break
-    if ipfail:
-        logging.warning('DHCP configuration failed')
-    else:
+    if ip:
+        logging.info('IP: {}'.format(ip))
         # new board, let's set up the time right away
         ntp_sync() 
+    else:
+        logging.warning('DHCP configuration failed')
         
 
 def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True):
