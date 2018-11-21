@@ -57,7 +57,7 @@ List all the API endpoints
 ```
 /usage
 ```
-This endpoint returns a timestamped report of current usage:  `{"unit": "gal", "timestamp": "2018-11-19 07:43:46.000", "volume": 1.03463}`
+This endpoint returns a timestamped report of current usage, eg. `{"timestamp": "2018-11-21 08:14:22.002", "volume": 1.6704, "pulses": 1305, "k": 1.28, "unit": "litre"}`
 
 #### Calibration
 
