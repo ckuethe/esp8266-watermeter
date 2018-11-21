@@ -249,19 +249,20 @@ def netconfig(ssid, password):
         ntp_sync() 
         
 
-def main(debug=0, mlpp=0):
+def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True):
     global app
     global port
 
+    logging.info('starting watermeter app')
     time.sleep(2)  # give the wifi time to connect
-    if True:
-        logging.debug('starting NTP task')
+    if do_ntp:
+        logging.info('starting NTP task')
         ntp_sync()
         _ntp_timer = Timer(-1)
         _ntp_timer.init(period=3_600_000, mode=Timer.PERIODIC, callback=ntp_sync)
 
-    if True:
-        logging.debug('starting device announcement task')
+    if do_netadv:
+        logging.info('starting device announcement task')
         discovery_msg()
         _discovery_timer = Timer(-1)
         _discovery_timer.init(period=30_000, mode=Timer.PERIODIC, callback=discovery_msg)
