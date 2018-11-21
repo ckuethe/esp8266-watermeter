@@ -6,6 +6,7 @@ from machine import Pin, Timer, RTC, WDT, reset
 import socket
 import time
 import picoweb
+import logging
 
 led_pin = Pin(2, Pin.OUT) # implicitly turns on the LED. 
 
@@ -242,7 +243,7 @@ def netconfig(ssid, password):
             ipfail = True
             break
     if ipfail:
-        print('DHCP configuration failed')
+        logging.warning('DHCP configuration failed')
     else:
         # new board, let's set up the time right away
         ntp_sync() 
@@ -254,15 +255,13 @@ def main(debug=0, mlpp=0):
 
     time.sleep(2)  # give the wifi time to connect
     if True:
-        if debug:
-            print('starting NTP task')
+        logging.debug('starting NTP task')
         ntp_sync()
         _ntp_timer = Timer(-1)
         _ntp_timer.init(period=3_600_000, mode=Timer.PERIODIC, callback=ntp_sync)
 
     if True:
-        if debug:
-            print('starting device announcement task')
+        logging.debug('starting device announcement task')
         discovery_msg()
         _discovery_timer = Timer(-1)
         _discovery_timer.init(period=30_000, mode=Timer.PERIODIC, callback=discovery_msg)
