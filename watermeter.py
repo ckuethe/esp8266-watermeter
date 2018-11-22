@@ -65,7 +65,8 @@ def send_adv_msg(_=None):
     i = net.ifconfig()
     dst = calculate_broadcast(i[0], i[1])
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.sendto(b'watermeter running on http://{}:{}'.format(i[0],port), (dst, port))
+    s.bind(('0.0.0.0', port))
+    s.sendto(b'watermeter running on http://{}:{}'.format(i[0],port), (dst, 1900))
     s.close()
     logging.info('advertised %s:%d to %s', i[0], port, dst)
 
