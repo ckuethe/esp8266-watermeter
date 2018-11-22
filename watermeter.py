@@ -3,7 +3,7 @@ from network import WLAN, STA_IF
 from btree import open as db_open
 from ntptime import settime as ntp_settime
 from machine import Pin, Timer, RTC, WDT, reset
-import socket
+import usocket as socket
 import time
 import picoweb
 import logging
@@ -40,14 +40,10 @@ net = WLAN(STA_IF)
 net.active(1)
 
 # i was getting some watchdog resets after a while. So maybe this can fix it.
-wdt = WDT()
-def feed_watchdog(_=None):
-    global wdt
-    wdt.feed()
-
-_wd_timer = Timer(-1)
-_wd_timer.init(period=1_000, mode=Timer.PERIODIC, callback=feed_watchdog)
-
+doggo = None
+def doggo_treats(_=None):
+    global doggo
+    doggo.feed()
 
 def inet_pton(dottedquad):
     a = list(map(int, dottedquad.strip().split('.')))
@@ -69,9 +65,9 @@ def send_adv_msg(_=None):
     i = net.ifconfig()
     dst = calculate_broadcast(i[0], i[1])
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    n = s.sendto('watermeter running on http://{}:{}'.format(i[0],port), (dst, port))
+    s.sendto(b'watermeter running on http://{}:{}'.format(i[0],port), (dst, port))
     s.close()
-    logging.info('advertised {}:{}'.format(i[0], port))
+    logging.info('advertised %s:%d to %s', i[0], port, dst)
 
 def ntp_sync(_=None):
     # this function is called once an hour by a periodic timer to do two
@@ -79,8 +75,13 @@ def ntp_sync(_=None):
     # as documented (time() and localtime() do some internal compensation)
     # and then call ntp_settime() to resync the clock which is apparently
     # pretty terrible
-    time.time()  # this is to keep the stupid RTC fed
-    ntp_settime()
+    time.time()
+
+    try:
+        # this could fail if the network isn't available
+        ntp_settime()
+    except Exception as e:
+        logging.info('NTP Sync failed: %s', e)
 
 def serialize_localtime(t=None):
     # Convert a time tuple into a bytes() object as require by btree
@@ -92,10 +93,13 @@ def deserialize_localtime(t=None):
     # Convert a string representation of a time tuple into a tuple
     if t is None:
         return None
-    t = tuple(map(int, t.decode('utf-8').split()))
-    if len(t) != 8:
+    try:
+        t = tuple(map(int, t.decode('utf-8').split()))
+        if len(t) != 8:
+            return None
+        return t
+    except Exception:
         return None
-    return t
 
 def load_state():
     global state
@@ -250,16 +254,17 @@ def netconfig(ssid=None, password=None):
             ip = i[0]
             break
     if ip:
-        logging.info('IP: {}'.format(ip))
+        logging.info('IP: %s', ip)
         # new board, let's set up the time right away
         ntp_sync() 
     else:
-        logging.warning('DHCP configuration failed')
+        logging.info('DHCP configuration failed')
         
 
-def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True):
+def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True, use_watchdog=True):
     global app
     global port
+    global doggo
 
     logging.info('starting watermeter app')
     time.sleep(2)  # give the wifi time to connect
@@ -275,9 +280,13 @@ def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True):
         _adv_timer = Timer(-1)
         _adv_timer.init(period=30_000, mode=Timer.PERIODIC, callback=send_adv_msg)
 
-
     load_state()
     save_state()
+
+    if use_watchdog:
+        doggo = WDT()
+        _wd_timer = Timer(-1)
+        _wd_timer.init(period=1_000, mode=Timer.PERIODIC, callback=doggo_treats)
 
     led_pin.on() # turns led off, because of the way they drive the pins.
     data_pin = Pin(4, Pin.IN, Pin.PULL_UP)
