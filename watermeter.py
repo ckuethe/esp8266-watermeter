@@ -285,7 +285,7 @@ def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True, use_watchdog=True):
         logger.debug('starting device announcement task')
         send_adv_msg()
         adv_timer = Timer(-1)
-        adv_timer.init(period=30_000, mode=Timer.PERIODIC, callback=send_adv_msg)
+        adv_timer.init(period=60_000, mode=Timer.PERIODIC, callback=send_adv_msg)
 
     load_state()
     save_state()
