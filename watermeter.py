@@ -126,15 +126,14 @@ def save_state():
         json.dump(state, fd)
         fd.close()
         os.rename('watermeter.json.tmp', 'watermeter.json')
-        logger.info('saving data')
+        logger.debug('saved data')
     except Exception:
         pass
 
 def data_sync(_=None):
-    logger.debug('pulse_ctr %d usage %d', pulse_ctr, state['usage'])
     if pulse_ctr == state['usage']:
         return
-    if time.time() - time.mktime(state['last_save_time']) >= 1800:
+    if time.time() - time.mktime(state['last_save_time']) >= 60:
         save_state()
 
 
@@ -297,7 +296,7 @@ def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True, use_watchdog=True):
 
     logger.debug('starting data sync task')
     save_timer = Timer(-1)
-    save_timer.init(period=1_800_000, mode=Timer.PERIODIC, callback=data_sync)
+    save_timer.init(period=600_000, mode=Timer.PERIODIC, callback=data_sync)
 
     led_pin.on() # turns led off, because of the way they drive the pins.
     data_pin = Pin(4, Pin.IN, Pin.PULL_UP)
