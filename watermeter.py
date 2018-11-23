@@ -280,7 +280,6 @@ def main(debug=0):
     global doggo
 
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
-    logger.info('starting watermeter app')
 
     time.sleep(2)  # give the wifi time to connect
 
@@ -310,6 +309,7 @@ def main(debug=0):
     data_pin = Pin(4, Pin.IN, Pin.PULL_UP)
     data_irq = data_pin.irq(trigger=Pin.IRQ_FALLING, handler=pulse_handler)
 
+    logger.info('starting watermeter app')
     app.run(debug=debug, port=port, host='0.0.0.0')
 
 if __name__ == '__main__':
