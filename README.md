@@ -126,3 +126,11 @@ Switch the reporting unit.
 ```
 
 Forces an immediate save to flash.
+
+#### Deactivate auto-start
+
+```
+/uninstall
+```
+
+renames `main.py` to `watermeter.py` so that it will not restart at boot.

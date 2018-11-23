@@ -233,6 +233,16 @@ def no_metric(req, resp):
         save_state()
     yield from picoweb.jsonify(resp, {'metric': False})
 
+@app.route("/uninstall")
+def uninstall(req, resp):
+    import os
+    files = os.listdir()
+    if 'watermeter.py' in files:
+        os.rename('watermeter.py', 'watermeter.py.bak')
+    if 'main.py' in files:
+        os.rename('main.py', 'watermeter.py')
+    yield from picoweb.jsonify(resp, {'msg': 'uninstalled watermeter app. please reboot'})
+
 def install_and_reboot():
     import os
     os.rename('watermeter.py', 'main.py')
