@@ -118,7 +118,6 @@ def save_state():
     global state
     global pulse_ctr
 
-    ntp_sync()
     state['last_save_time'] = time.localtime()
     state['usage'] = pulse_ctr
     try:
