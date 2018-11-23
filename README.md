@@ -118,3 +118,11 @@ impellers, and pipe will have varying volumes per pulse.
 ```
 
 Switch the reporting unit.
+
+#### Sync to permanent storage
+
+```
+/sync
+```
+
+Forces an immediate save to flash.
