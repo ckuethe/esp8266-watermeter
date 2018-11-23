@@ -288,26 +288,26 @@ def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True, use_watchdog=True):
     if do_ntp:
         logger.debug('starting NTP task')
         ntp_sync()
-        _ntp_timer = Timer(-1)
-        _ntp_timer.init(period=3_600_000, mode=Timer.PERIODIC, callback=ntp_sync)
+        ntp_timer = Timer(-1)
+        ntp_timer.init(period=3_600_000, mode=Timer.PERIODIC, callback=ntp_sync)
 
     if do_netadv:
         logger.debug('starting device announcement task')
         send_adv_msg()
-        _adv_timer = Timer(-1)
-        _adv_timer.init(period=30_000, mode=Timer.PERIODIC, callback=send_adv_msg)
+        adv_timer = Timer(-1)
+        adv_timer.init(period=30_000, mode=Timer.PERIODIC, callback=send_adv_msg)
 
     load_state()
     save_state()
 
     if use_watchdog:
         doggo = WDT()
-        _wd_timer = Timer(-1)
-        _wd_timer.init(period=1_000, mode=Timer.PERIODIC, callback=doggo_treats)
+        wd_timer = Timer(-1)
+        wd_timer.init(period=1_000, mode=Timer.PERIODIC, callback=doggo_treats)
 
     logger.debug('starting data sync task')
-    _save_timer = Timer(-1)
-    _save_timer.init(period=1_800_000, mode=Timer.PERIODIC, callback=data_sync)
+    save_timer = Timer(-1)
+    save_timer.init(period=1_800_000, mode=Timer.PERIODIC, callback=data_sync)
 
     led_pin.on() # turns led off, because of the way they drive the pins.
     data_pin = Pin(4, Pin.IN, Pin.PULL_UP)
