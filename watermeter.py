@@ -1,12 +1,13 @@
 # vim: tabstop=4:softtabstop=4:shiftwidth=4:expandtab:
 from network import WLAN, STA_IF
-from btree import open as db_open
 from ntptime import settime as ntp_settime
 from machine import Pin, Timer, RTC, WDT, reset
 import usocket as socket
 import time
 import picoweb
 import logging
+import json
+import os
 
 led_pin = Pin(2, Pin.OUT) # implicitly turns on the LED. 
 
@@ -19,18 +20,13 @@ pulse_ctr = 0
 gal_to_l = 3.78541
 
 # YF-S402B = 1.5 mlpp
-# FL-308 = 0.875657 mlpp
+# FL-308 = 1.28 mlpp
 
 state = {
-    'boot_time':      '2018 11 17 12 0 0 0',  # when the board was last booted
-    'last_save_time': '2018 11 17 12 0 0 0',  # when the data was last saved
+    'last_save_time': (2018,11,22, 12,0,0,0, 0),  # when the data was last saved
     'ml_per_pulse': 1.5,    # calibration
     'metric': True,         # report in metric or imperial units
-    # It's not clear to me yet what behavior to take here:
-    # - store usage in pulses?
-    # - store usage in litres?
-    # - preserve/clear usage when the calibration changes?
-    'usage': 0,
+    'usage': 0,             # pulses
 }
 
 
@@ -81,59 +77,67 @@ def ntp_sync(_=None):
     try:
         # this could fail if the network isn't available
         ntp_settime()
+        return True
     except Exception as e:
         logging.info('NTP Sync failed: %s', e)
-
-def serialize_localtime(t=None):
-    # Convert a time tuple into a bytes() object as require by btree
-    if t is None:
-        t = time.localtime()
-    return ' '.join(map(str, t))
-
-def deserialize_localtime(t=None):
-    # Convert a string representation of a time tuple into a tuple
-    if t is None:
-        return None
-    try:
-        t = tuple(map(int, t.decode('utf-8').split()))
-        if len(t) != 8:
-            return None
-        return t
-    except Exception:
-        return None
+        return False
 
 def load_state():
     global state
-    fd = open('watermeter.db', 'w+b')
-    db = db_open(fd)
-    db.flush()
+    global pulse_ctr
 
-    # update the default state with any saved state (which might be null)
-    state.update(dict(db.items()))
+    rtc = RTC()
+    if time.time() < 500_000_000:
+        # NTP has not set time, bootstrap the clock with default time
+        rtc.datetime(state['last_save_time'])
+        logging.info('bootstrapped clock to %s', str(state['last_save_time']))
 
-    # we're done with the database for now
-    db.flush()
-    db.close()
-    fd.close()
+    try:
+        with open('watermeter.json', 'r') as fd:
+            tmp = json.load(fd)
+            for k,v in tmp.items():
+                logging.info('restored %s = %s', k, v)
+                if k in ['usage']:
+                    state[k] = int(v)
+                elif k in ['ml_per_pulse']:
+                    state[k] = float(v)
+                else:
+                    state[k] = v
 
-    if time.time() < 1000000:
-        # NTP has not yet kicked in, bootstrap the clock
-        state['boot_time'] = state['last_save_time']
-        now = deserialize_localtime(state['last_save_time'])
-        RTC().init(now)
+        pulse_ctr = state['usage']
+    except Exception:
+        # catches JSON parse failures from empty or nonexistent files,
+        # unexpected structure, failed conversions...
+        pass
 
+    if time.time() < time.mktime(state['last_save_time']):
+        rtc.datetime(state['last_save_time'])
+        logging.info('updated clock to %s', str(state['last_save_time']))
 
 def save_state():
     global state
-    fd = open('watermeter.db', 'w+b')
-    db = db_open(fd)
-    state['last_save_time'] = serialize_localtime()
-    for k,v in state.items():
-        db[k] = str(v)
-    db.flush()
-    db.close()
-    fd.close()
+    global pulse_ctr
 
+    ntp_sync()
+    state['last_save_time'] = time.localtime()
+    state['usage'] = pulse_ctr
+    try:
+        fd = open('watermeter.json.tmp', 'w')
+        json.dump(state, fd)
+        fd.close()
+        os.rename('watermeter.json.tmp', 'watermeter.json')
+    except Exception:
+        pass
+
+def data_sync():
+    global state
+    global pulse_ctr
+
+    if pulse_ctr == state['usage']:
+        return
+    if time.time() - time.mktime(state['last_save_time']) >= 1800:
+        logging.info('saving data')
+        save_state()
 
 def pulse_handler(unused_arg=None):
     # increment the pulse counter 
@@ -288,6 +292,10 @@ def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True, use_watchdog=True):
         doggo = WDT()
         _wd_timer = Timer(-1)
         _wd_timer.init(period=1_000, mode=Timer.PERIODIC, callback=doggo_treats)
+
+    logging.info('starting data sync task')
+    _save_timer = Timer(-1)
+    _save_timer.init(period=3_600_000, mode=Timer.PERIODIC, callback=data_sync)
 
     led_pin.on() # turns led off, because of the way they drive the pins.
     data_pin = Pin(4, Pin.IN, Pin.PULL_UP)
