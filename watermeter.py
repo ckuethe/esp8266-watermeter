@@ -11,6 +11,8 @@ import os
 
 led_pin = Pin(2, Pin.OUT) # implicitly turns on the LED. 
 
+logger = logging.Logger('watermeter')
+
 # need to create this early so the decorator works
 app = picoweb.WebApp(None)
 
@@ -64,7 +66,7 @@ def send_adv_msg(_=None):
     s.bind(('0.0.0.0', port))
     s.sendto(b'watermeter running on http://{}:{}'.format(i[0],port), (dst, 1900))
     s.close()
-    logging.info('advertised %s:%d to %s', i[0], port, dst)
+    logger.info('advertised %s:%d to %s', i[0], port, dst)
 
 def ntp_sync(_=None):
     # this function is called once an hour by a periodic timer to do two
@@ -77,9 +79,10 @@ def ntp_sync(_=None):
     try:
         # this could fail if the network isn't available
         ntp_settime()
+        logger.debug('NTP synced')
         return True
     except Exception as e:
-        logging.info('NTP Sync failed: %s', e)
+        logger.warning('NTP Sync failed: %s', e)
         return False
 
 def load_state():
@@ -90,13 +93,13 @@ def load_state():
     if time.time() < 500_000_000:
         # NTP has not set time, bootstrap the clock with default time
         rtc.datetime(state['last_save_time'])
-        logging.info('bootstrapped clock to %s', str(state['last_save_time']))
+        logger.debug('bootstrapped clock to %s', str(state['last_save_time']))
 
     try:
         with open('watermeter.json', 'r') as fd:
             tmp = json.load(fd)
             for k,v in tmp.items():
-                logging.info('restored %s = %s', k, v)
+                logger.debug('restored %s = %s', k, v)
                 if k in ['usage']:
                     state[k] = int(v)
                 elif k in ['ml_per_pulse']:
@@ -112,7 +115,7 @@ def load_state():
 
     if time.time() < time.mktime(state['last_save_time']):
         rtc.datetime(state['last_save_time'])
-        logging.info('updated clock to %s', str(state['last_save_time']))
+        logger.debug('updated clock to %s', str(state['last_save_time']))
 
 def save_state():
     global state
@@ -126,18 +129,20 @@ def save_state():
         json.dump(state, fd)
         fd.close()
         os.rename('watermeter.json.tmp', 'watermeter.json')
+        logger.info('saving data')
     except Exception:
         pass
 
-def data_sync():
+def data_sync(_=None):
     global state
     global pulse_ctr
 
+    logger.debug('pulse_ctr %d usage %d', pulse_ctr, state['usage'])
     if pulse_ctr == state['usage']:
         return
     if time.time() - time.mktime(state['last_save_time']) >= 1800:
-        logging.info('saving data')
         save_state()
+
 
 def pulse_handler(unused_arg=None):
     # increment the pulse counter 
@@ -259,11 +264,16 @@ def netconfig(ssid=None, password=None):
             ip = i[0]
             break
     if ip:
-        logging.info('IP: %s', ip)
-        # new board, let's set up the time right away
-        ntp_sync() 
+        logger.info('IP: %s', ip)
+        # new board, let's set the time right away and retry
+        # a few times just in case the network is slow
+        for i in range(5):
+            if ntp_sync():
+                break
+            else:
+                time.sleep(2)
     else:
-        logging.info('DHCP configuration failed')
+        logger.info('DHCP configuration failed')
         
 
 def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True, use_watchdog=True):
@@ -271,16 +281,18 @@ def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True, use_watchdog=True):
     global port
     global doggo
 
-    logging.info('starting watermeter app')
+    logger.setLevel(logging.DEBUG)
+    logger.info('starting watermeter app')
+
     time.sleep(2)  # give the wifi time to connect
     if do_ntp:
-        logging.info('starting NTP task')
+        logger.debug('starting NTP task')
         ntp_sync()
         _ntp_timer = Timer(-1)
         _ntp_timer.init(period=3_600_000, mode=Timer.PERIODIC, callback=ntp_sync)
 
     if do_netadv:
-        logging.info('starting device announcement task')
+        logger.debug('starting device announcement task')
         send_adv_msg()
         _adv_timer = Timer(-1)
         _adv_timer.init(period=30_000, mode=Timer.PERIODIC, callback=send_adv_msg)
@@ -293,9 +305,9 @@ def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True, use_watchdog=True):
         _wd_timer = Timer(-1)
         _wd_timer.init(period=1_000, mode=Timer.PERIODIC, callback=doggo_treats)
 
-    logging.info('starting data sync task')
+    logger.debug('starting data sync task')
     _save_timer = Timer(-1)
-    _save_timer.init(period=3_600_000, mode=Timer.PERIODIC, callback=data_sync)
+    _save_timer.init(period=1_800_000, mode=Timer.PERIODIC, callback=data_sync)
 
     led_pin.on() # turns led off, because of the way they drive the pins.
     data_pin = Pin(4, Pin.IN, Pin.PULL_UP)
