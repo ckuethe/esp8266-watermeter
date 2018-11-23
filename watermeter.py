@@ -40,7 +40,6 @@ net.active(1)
 # i was getting some watchdog resets after a while. So maybe this can fix it.
 doggo = None
 def doggo_treats(_=None):
-    global doggo
     doggo.feed()
 
 def inet_pton(dottedquad):
@@ -58,8 +57,6 @@ def calculate_broadcast(ip, nm):
     return inet_ntop(netaddr+bcast_host)
 
 def send_adv_msg(_=None):
-    global net
-    global port
     i = net.ifconfig()
     dst = calculate_broadcast(i[0], i[1])
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -134,9 +131,6 @@ def save_state():
         pass
 
 def data_sync(_=None):
-    global state
-    global pulse_ctr
-
     logger.debug('pulse_ctr %d usage %d', pulse_ctr, state['usage'])
     if pulse_ctr == state['usage']:
         return
@@ -167,8 +161,6 @@ def show_endpoints(req, resp):
 
 @app.route("/usage")
 def show_config(req, resp):
-    global pulse_ctr
-    global state
     t = '{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}.{:03d}'.format(*(time.localtime()))
     u = 'litre'
     v = pulse_ctr * state['ml_per_pulse'] / 1000.0
@@ -277,8 +269,6 @@ def netconfig(ssid=None, password=None):
         
 
 def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True, use_watchdog=True):
-    global app
-    global port
     global doggo
 
     logger.setLevel(logging.DEBUG)
