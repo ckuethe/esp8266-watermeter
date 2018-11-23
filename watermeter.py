@@ -266,32 +266,31 @@ def netconfig(ssid=None, password=None):
         logger.info('DHCP configuration failed')
         
 
-def main(debug=0, mlpp=0, do_ntp=True, do_netadv=True, use_watchdog=True):
+def main(debug=0):
     global doggo
 
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.DEBUG if debug else logging.INFO)
     logger.info('starting watermeter app')
 
     time.sleep(2)  # give the wifi time to connect
-    if do_ntp:
-        logger.debug('starting NTP task')
-        ntp_sync()
-        ntp_timer = Timer(-1)
-        ntp_timer.init(period=3_600_000, mode=Timer.PERIODIC, callback=ntp_sync)
 
-    if do_netadv:
-        logger.debug('starting device announcement task')
-        send_adv_msg()
-        adv_timer = Timer(-1)
-        adv_timer.init(period=60_000, mode=Timer.PERIODIC, callback=send_adv_msg)
+    logger.debug('starting NTP task')
+    ntp_sync()
+    ntp_timer = Timer(-1)
+    ntp_timer.init(period=3_600_000, mode=Timer.PERIODIC, callback=ntp_sync)
+
+    logger.debug('starting device announcement task')
+    send_adv_msg()
+    adv_timer = Timer(-1)
+    adv_timer.init(period=60_000, mode=Timer.PERIODIC, callback=send_adv_msg)
 
     load_state()
     save_state()
 
-    if use_watchdog:
-        doggo = WDT()
-        wd_timer = Timer(-1)
-        wd_timer.init(period=1_000, mode=Timer.PERIODIC, callback=doggo_treats)
+    logger.debug('starting watchdog task')
+    doggo = WDT()
+    wd_timer = Timer(-1)
+    wd_timer.init(period=1_000, mode=Timer.PERIODIC, callback=doggo_treats)
 
     logger.debug('starting data sync task')
     save_timer = Timer(-1)
