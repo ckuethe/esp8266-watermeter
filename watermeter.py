@@ -275,6 +275,13 @@ def netconfig(ssid=None, password=None):
     else:
         logger.info('DHCP configuration failed')
         
+def ms(s=None, m=None, h=None):
+    if s is not None:
+        return s * 1000
+    if h is not None:
+        return m * 60 * 1000
+    if h is not None:
+        return h * 60 * 60 * 1000
 
 def main(debug=0):
     global doggo
@@ -286,12 +293,12 @@ def main(debug=0):
     logger.debug('starting NTP task')
     ntp_sync()
     ntp_timer = Timer(-1)
-    ntp_timer.init(period=3_600_000, mode=Timer.PERIODIC, callback=ntp_sync)
+    ntp_timer.init(period=ms(h=1), mode=Timer.PERIODIC, callback=ntp_sync)
 
     logger.debug('starting device announcement task')
     send_adv_msg()
     adv_timer = Timer(-1)
-    adv_timer.init(period=60_000, mode=Timer.PERIODIC, callback=send_adv_msg)
+    adv_timer.init(period=ms(m=1), mode=Timer.PERIODIC, callback=send_adv_msg)
 
     load_state()
     save_state()
@@ -299,11 +306,11 @@ def main(debug=0):
     logger.debug('starting watchdog task')
     doggo = WDT()
     wd_timer = Timer(-1)
-    wd_timer.init(period=1_000, mode=Timer.PERIODIC, callback=doggo_treats)
+    wd_timer.init(period=ms(s=1), mode=Timer.PERIODIC, callback=doggo_treats)
 
     logger.debug('starting data sync task')
     save_timer = Timer(-1)
-    save_timer.init(period=600_000, mode=Timer.PERIODIC, callback=data_sync)
+    save_timer.init(period=ms(m=10), mode=Timer.PERIODIC, callback=data_sync)
 
     led_pin.on() # turns led off, because of the way they drive the pins.
     data_pin = Pin(4, Pin.IN, Pin.PULL_UP)
