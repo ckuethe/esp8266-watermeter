@@ -1,5 +1,5 @@
 # vim: tabstop=4:softtabstop=4:shiftwidth=4:expandtab:
-from network import WLAN, STA_IF
+from network import WLAN, STA_IF, AP_IF
 from ntptime import settime as ntp_settime
 from machine import Pin, Timer, RTC, WDT, reset
 import usocket as socket
@@ -32,8 +32,11 @@ state = {
 }
 
 
-# create an interface and activate it. Might be used later to configure the
-# wifi on a new board, and will definitely be used for the SSDP-ish broadcast
+# Create a station interface and activate it. It'll be used for the device
+# advertisement broadcast. Just in case there was a previous AP configuration
+# drop that interface
+net = WLAN(AP_IF)
+net.active(0)
 net = WLAN(STA_IF)
 net.active(1)
 
