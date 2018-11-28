@@ -9,7 +9,7 @@ import logging
 import json
 import os
 
-led_pin = Pin(2, Pin.OUT) # implicitly turns on the LED. 
+led_pin = None
 
 logger = logging.Logger('watermeter')
 
@@ -144,8 +144,9 @@ def pulse_handler(unused_arg=None):
     global pulse_ctr
     global led_pin
     pulse_ctr += 1
-    # eye candy. blink the 
-    led_pin.value(led_pin.value()^1)
+    # eye candy: blink the LED. Maybe.
+    if led_pin:
+        led_pin.value(led_pin.value()^1)
 
 @app.route("/")
 def show_endpoints(req, resp):
@@ -288,6 +289,7 @@ def ms(s=None, m=None, h=None):
 
 def main(debug=0):
     global doggo
+    global led_pin
 
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
@@ -305,6 +307,8 @@ def main(debug=0):
 
     load_state()
     save_state()
+
+    led_pin = Pin(2, Pin.OUT) # implicitly turns on the LED.
 
     logger.debug('starting watchdog task')
     doggo = WDT()
