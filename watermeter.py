@@ -1,15 +1,17 @@
 # vim: tabstop=4:softtabstop=4:shiftwidth=4:expandtab:
 from network import WLAN, STA_IF, AP_IF
 from ntptime import settime as ntp_settime
-from machine import Pin, Timer, RTC, WDT, reset
+from machine import Pin, I2C, Timer, RTC, WDT, reset
 import usocket as socket
 import time
 import picoweb
 import logging
 import json
 import os
+from ssd1306 import SSD1306_I2C
 
 led_pin = None
+oled = None
 
 logger = logging.Logger('watermeter')
 
@@ -17,6 +19,7 @@ logger = logging.Logger('watermeter')
 app = picoweb.WebApp(None)
 
 # global, various functions can share them
+ip = None
 port = 2782  # Spells 'AQUA' on a phone keypad
 pulse_ctr = 0
 gal_to_l = 3.78541
@@ -29,6 +32,7 @@ state = {
     'ml_per_pulse': 1.5,    # calibration
     'metric': True,         # report in metric or imperial units
     'usage': 0,             # pulses
+    'indicator': None,      # [None, 'blink', 'oled']
 }
 
 
@@ -60,13 +64,18 @@ def calculate_broadcast(ip, nm):
     return inet_ntop(netaddr+bcast_host)
 
 def send_adv_msg(_=None):
+    global ip
     i = net.ifconfig()
-    dst = calculate_broadcast(i[0], i[1])
+    ip = i[0]
+    dst = calculate_broadcast(ip, i[1])
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind(('0.0.0.0', port))
-    s.sendto(b'watermeter running on http://{}:{}'.format(i[0],port), (dst, 1900))
+    try:
+        s.sendto(b'watermeter running on http://{}:{}'.format(ip,port), (dst, 1900))
+    except OSError:
+        pass
     s.close()
-    logger.info('advertised %s:%d to %s', i[0], port, dst)
+    logger.info('advertised %s:%d to %s', ip, port, dst)
 
 def ntp_sync(_=None):
     # this function is called once an hour by a periodic timer to do two
@@ -104,6 +113,9 @@ def load_state():
                     state[k] = int(v)
                 elif k in ['ml_per_pulse']:
                     state[k] = float(v)
+                elif k in ['indicator']:
+                    if v is not None:
+                        state[k] = 'oled' if v == 'oled' else 'blink'
                 else:
                     state[k] = v
 
@@ -148,16 +160,41 @@ def pulse_handler(unused_arg=None):
     if led_pin:
         led_pin.value(led_pin.value()^1)
 
+def setup_oled():
+    # this assumes a particular board.
+
+    p_rst = Pin(16, Pin.OUT)
+    p_rst.off()
+    p_rst.on()
+
+    bus = I2C(sda=Pin(4), scl=Pin(5))
+    return SSD1306_I2C(128, 32, bus)
+
+def oled_output(_=None):
+    doggo_treats()
+    u = 'litre'
+    v = pulse_ctr * state['ml_per_pulse'] / 1000.0
+
+    if state['metric'] is False:
+        u = 'gallon'
+        v /= gal_to_l
+
+    t = time.localtime()
+    oled.fill(0)
+    oled.text("{:02d}/{:02d} {:02d}:{:02d}:{:02d}".format(t[1], t[2], t[3], t[4], t[5]), 0, 0)
+    oled.text("{}".format(ip), 0, 8)
+    oled.text("{:.1f} {}".format(v, u), 0, 16)
+    oled.show()
+
 @app.route("/")
 def show_endpoints(req, resp):
-    endpoints = {
-        '/': 'show endpoints',
-        '/usage': 'show current usage',
-        '/sync': 'save database to flash',
-        '/calibrate': 'calibrate the flowmeter',
-        '/metric': 'switch to metric units',
-        '/imperial': 'switch to imperial units',
-    }
+    endpoints = list(
+        filter(lambda x: str(x).startswith('/'),
+            map(lambda x: x[0],
+                app.url_map
+                )
+            )
+        )
     yield from picoweb.jsonify(resp, endpoints)
 
 
@@ -169,7 +206,7 @@ def show_config(req, resp):
 
     if state['metric'] is False:
         u = 'gal'
-        v /= 3.78541
+        v /= gal_to_l
 
     msg = {
         'timestamp': t, 
@@ -246,13 +283,33 @@ def install_and_reboot():
     os.rename('watermeter.py', 'main.py')
     reset()
 
-def netconfig(ssid=None, password=None):
+def initconfig(ssid=None, password=None, use_oled=None):
+    global state
+    global oled
+    if use_oled is None:
+        tmp = input("Use OLED [N]/y? ").lower().strip()
+        if tmp in ['y', 'yes', 't', 'true', 1, '1']:
+            use_oled = True
+        else:
+            use_oled = False
+
+    if use_oled == True:
+        state['indicator'] = 'oled'
+        oled = setup_oled()
+        oled.fill(0)
+        oled.text("ESP8266 WiFi", 0, 8)
+        oled.text("Water  Meter", 0, 16)
+        oled.show()
+
     if ssid is None:
         ssid = input('SSID? ')
         password = input('Password? ')
         if password == '':
             password = None
-    net.connect(ssid, password)
+    if ssid:
+        net.connect(ssid, password)
+    else:
+        logger.info('skipped network configuration')
 
     ip = None
     for _ in range(30):
@@ -272,18 +329,23 @@ def netconfig(ssid=None, password=None):
                 time.sleep(2)
     else:
         logger.info('DHCP configuration failed')
+
+    save_state()
         
 def ms(s=None, m=None, h=None):
+    t = 0
     if s is not None:
-        return s * 1000
+        t += s * 1000
+    if m is not None:
+        t += m * 60 * 1000
     if h is not None:
-        return m * 60 * 1000
-    if h is not None:
-        return h * 60 * 60 * 1000
+        t += h * 60 * 60 * 1000
+    return t
 
 def main(debug=0):
     global doggo
     global led_pin
+    global oled
 
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
@@ -302,18 +364,26 @@ def main(debug=0):
     load_state()
     save_state()
 
-    led_pin = Pin(2, Pin.OUT) # implicitly turns on the LED.
-
     logger.debug('starting watchdog task')
     doggo = WDT()
     wd_timer = Timer(-1)
     wd_timer.init(period=ms(s=1), mode=Timer.PERIODIC, callback=doggo_treats)
 
+    if state['indicator'] == 'oled':
+        logger.debug('starting OLED task')
+        oled = setup_oled()
+        oled_output()
+        oled_timer = Timer(-1)
+        oled_timer.init(period=ms(s=5), mode=Timer.PERIODIC, callback=oled_output)
+    else:
+        logger.debug('using LED blinks')
+        led_pin = Pin(2, Pin.OUT) # implicitly turns on the LED.
+        led_pin.on() # turns led off, because of the way they drive the pins.
+
     logger.debug('starting data sync task')
     save_timer = Timer(-1)
     save_timer.init(period=ms(m=10), mode=Timer.PERIODIC, callback=data_sync)
 
-    led_pin.on() # turns led off, because of the way they drive the pins.
     data_pin = Pin(4, Pin.IN, Pin.PULL_UP)
     data_irq = data_pin.irq(trigger=Pin.IRQ_FALLING, handler=pulse_handler)
 
