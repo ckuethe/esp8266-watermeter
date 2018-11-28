@@ -105,19 +105,13 @@ impellers, and pipe will have varying volumes per pulse.
 
 ```
 /metric
-/liter
-/litre
-/liters
-/litres
 ```
 
 ```
 /imperial
-/gallon
-/gallons
 ```
 
-Switch the reporting unit.
+Switch the reporting unit between metric (litres) and imperial (gallons).
 
 #### Sync to permanent storage
 

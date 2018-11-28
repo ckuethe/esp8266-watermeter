@@ -216,10 +216,6 @@ def calibrate(req, resp):
     yield from picoweb.jsonify(resp, rv)
 
 @app.route("/metric")
-@app.route("/liter")
-@app.route("/litre")
-@app.route("/liters")
-@app.route("/litres")
 def go_metric(req, resp):
     global state
     if not state['metric']:
@@ -228,8 +224,6 @@ def go_metric(req, resp):
     yield from picoweb.jsonify(resp, {'metric': True})
 
 @app.route("/imperial")
-@app.route("/gallon")
-@app.route("/gallons")
 def no_metric(req, resp):
     global state
     if state['metric']:
