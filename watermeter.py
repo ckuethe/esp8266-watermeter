@@ -171,7 +171,7 @@ def setup_oled():
     return SSD1306_I2C(128, 32, bus)
 
 def oled_output(_=None):
-    doggo_treats()
+    doggo_treats() # just in case the OLED is slow
     u = 'litre'
     v = pulse_ctr * state['ml_per_pulse'] / 1000.0
 
@@ -367,10 +367,7 @@ def main(debug=0):
     load_state()
     save_state()
 
-    logger.debug('starting watchdog task')
     doggo = WDT()
-    wd_timer = Timer(-1)
-    wd_timer.init(period=ms(s=1), mode=Timer.PERIODIC, callback=doggo_treats)
 
     dpin = 4 # D2
     if state['indicator'] == 'oled':
@@ -383,6 +380,9 @@ def main(debug=0):
     else:
         logger.debug('using LED blinks')
         led_pin = Pin(2, Pin.OUT, value=1)
+        logger.debug('starting watchdog task')
+        wd_timer = Timer(-1)
+        wd_timer.init(period=ms(s=1), mode=Timer.PERIODIC, callback=doggo_treats)
 
     logger.debug('starting data sync task')
     save_timer = Timer(-1)
