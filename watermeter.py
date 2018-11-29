@@ -151,7 +151,7 @@ def data_sync(_=None):
         save_state()
 
 
-def pulse_handler(unused_arg=None):
+def pulse_handler(_=None):
     # increment the pulse counter 
     global pulse_ctr
     global led_pin
