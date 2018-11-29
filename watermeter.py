@@ -382,8 +382,7 @@ def main(debug=0):
         dpin = 12 # D6
     else:
         logger.debug('using LED blinks')
-        led_pin = Pin(2, Pin.OUT) # implicitly turns on the LED.
-        led_pin.on() # turns led off, because of the way they drive the pins.
+        led_pin = Pin(2, Pin.OUT, value=1)
 
     logger.debug('starting data sync task')
     save_timer = Timer(-1)
