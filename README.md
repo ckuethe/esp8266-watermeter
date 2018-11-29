@@ -52,11 +52,12 @@ Network Advertisement:
 #### Installation
 1. Flash micropython to the target board
 	1. I have provided a binary of my micropython build [here](esp8266-firmware-git.bin)
-	1. You can build your own by adding and removing the listed modules
+	1. You can build your own by adding and removing the listed modules	
 1. Copy in watermeter.py, eg. `ampy -p /dev/ttyUSB0 watermeter.py`
+	1. Some boards don't have enough memory to compile, so I've included precompiled bytecode [here](watermeter.mpy)
 1. Connect to the ESP8266 over its serial console
 1. `import watermeter`
-1. `watermeter.netconfig('your-wifi-ssid-here', 'your-wifi-password-here')`  # or just `watermeter.netconfig()`
+1. `watermeter.initconfig('your-wifi-ssid-here', 'your-wifi-password-here', False)`  # or just `watermeter.netconfig()`
 1. `watermeter.install_and_reboot()` # renames watermeter.py to main.py so that the bootloader will run it at startup
 
 #### Removed Modules
