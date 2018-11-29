@@ -369,12 +369,14 @@ def main(debug=0):
     wd_timer = Timer(-1)
     wd_timer.init(period=ms(s=1), mode=Timer.PERIODIC, callback=doggo_treats)
 
+    dpin = 4 # D2
     if state['indicator'] == 'oled':
         logger.debug('starting OLED task')
         oled = setup_oled()
         oled_output()
         oled_timer = Timer(-1)
-        oled_timer.init(period=ms(s=5), mode=Timer.PERIODIC, callback=oled_output)
+        oled_timer.init(period=ms(s=1), mode=Timer.PERIODIC, callback=oled_output)
+        dpin = 12 # D6
     else:
         logger.debug('using LED blinks')
         led_pin = Pin(2, Pin.OUT) # implicitly turns on the LED.
@@ -384,7 +386,7 @@ def main(debug=0):
     save_timer = Timer(-1)
     save_timer.init(period=ms(m=10), mode=Timer.PERIODIC, callback=data_sync)
 
-    data_pin = Pin(4, Pin.IN, Pin.PULL_UP)
+    data_pin = Pin(dpin, Pin.IN, Pin.PULL_UP)
     data_irq = data_pin.irq(trigger=Pin.IRQ_FALLING, handler=pulse_handler)
 
     logger.info('starting watermeter app')
