@@ -1,7 +1,7 @@
 # vim: tabstop=4:softtabstop=4:shiftwidth=4:expandtab:
 from network import WLAN, STA_IF, AP_IF
 from ntptime import settime as ntp_settime
-from machine import Pin, I2C, Timer, RTC, WDT, reset
+from machine import Pin, I2C, Timer, RTC, WDT, reset, freq
 import usocket as socket
 import time
 import picoweb
@@ -350,7 +350,7 @@ def main(debug=0):
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
     logger.debug('going faster!')
-    machine.freq(160_000_000)
+    freq(160_000_000)
 
     time.sleep(2)  # give the wifi time to connect
 
