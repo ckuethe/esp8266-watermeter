@@ -20,7 +20,7 @@ app = picoweb.WebApp(None)
 
 # global, various functions can share them
 ip = None
-port = 2782  # Spells 'AQUA' on a phone keypad
+port = 80
 pulse_ctr = 0
 gal_to_l = 3.78541
 
@@ -71,11 +71,11 @@ def send_adv_msg(_=None):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind(('0.0.0.0', port))
     try:
-        s.sendto(b'watermeter running on http://{}:{}'.format(ip,port), (dst, 1900))
+        s.sendto(b'watermeter running on http://{}'.format(ip), (dst, 1900))
     except OSError:
         pass
     s.close()
-    logger.info('advertised %s:%d to %s', ip, port, dst)
+    logger.info('advertised http://%s to %s', ip, dst)
 
 def ntp_sync(_=None):
     # this function is called once an hour by a periodic timer to do two
@@ -83,12 +83,13 @@ def ntp_sync(_=None):
     # as documented (time() and localtime() do some internal compensation)
     # and then call ntp_settime() to resync the clock which is apparently
     # pretty terrible
-    time.time()
 
     try:
+        t = time.time()
         # this could fail if the network isn't available
         ntp_settime()
-        logger.debug('NTP synced')
+        t = time.time() - t
+        logger.debug('NTP synced, delta %f', t)
         return True
     except Exception as e:
         logger.warning('NTP Sync failed: %s', e)
@@ -145,10 +146,14 @@ def save_state():
         pass
 
 def data_sync(_=None):
+    logger.debug('auto sync')
     if pulse_ctr == state['usage']:
+        logger.debug('no sync needed')
         return
     if time.time() - time.mktime(state['last_save_time']) >= 60:
         save_state()
+    else:
+        logger.debug('not yet time to sync')
 
 
 def pulse_handler(_=None):
@@ -357,7 +362,7 @@ def main(debug=0):
     logger.debug('starting NTP task')
     ntp_sync()
     ntp_timer = Timer(-1)
-    ntp_timer.init(period=ms(h=1), mode=Timer.PERIODIC, callback=ntp_sync)
+    ntp_timer.init(period=ms(m=5), mode=Timer.PERIODIC, callback=ntp_sync)
 
     logger.debug('starting device announcement task')
     send_adv_msg()
@@ -386,7 +391,7 @@ def main(debug=0):
 
     logger.debug('starting data sync task')
     save_timer = Timer(-1)
-    save_timer.init(period=ms(m=10), mode=Timer.PERIODIC, callback=data_sync)
+    save_timer.init(period=ms(m=3), mode=Timer.PERIODIC, callback=data_sync)
 
     data_pin = Pin(dpin, Pin.IN, Pin.PULL_UP)
     data_irq = data_pin.irq(trigger=Pin.IRQ_FALLING, handler=pulse_handler)
