@@ -8,7 +8,6 @@ import picoweb
 import logging
 import json
 import os
-from ssd1306 import SSD1306_I2C
 
 led_pin = None
 oled = None
@@ -167,6 +166,7 @@ def pulse_handler(_=None):
         led_pin.value(led_pin.value()^1)
 
 def setup_oled():
+    from ssd1306 import SSD1306_I2C
     # this assumes a particular board.
 
     p_rst = Pin(16, Pin.OUT)
