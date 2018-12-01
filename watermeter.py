@@ -362,7 +362,7 @@ def main(debug=0):
     logger.debug('starting NTP task')
     ntp_sync()
     ntp_timer = Timer(-1)
-    ntp_timer.init(period=ms(m=5), mode=Timer.PERIODIC, callback=ntp_sync)
+    ntp_timer.init(period=ms(m=7), mode=Timer.PERIODIC, callback=ntp_sync)
 
     logger.debug('starting device announcement task')
     send_adv_msg()
@@ -391,7 +391,7 @@ def main(debug=0):
 
     logger.debug('starting data sync task')
     save_timer = Timer(-1)
-    save_timer.init(period=ms(m=3), mode=Timer.PERIODIC, callback=data_sync)
+    save_timer.init(period=ms(m=5), mode=Timer.PERIODIC, callback=data_sync)
 
     data_pin = Pin(dpin, Pin.IN, Pin.PULL_UP)
     data_irq = data_pin.irq(trigger=Pin.IRQ_FALLING, handler=pulse_handler)
