@@ -83,7 +83,8 @@ def ntp_sync(_=None):
     # as documented (time() and localtime() do some internal compensation)
     # and then call ntp_settime() to resync the clock which is apparently
     # pretty terrible
-
+    if not net.isconnected():
+        return False
     try:
         t = time.time()
         # this could fail if the network isn't available
