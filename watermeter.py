@@ -280,13 +280,23 @@ def uninstall(req, resp):
     files = os.listdir()
     if 'watermeter.py' in files:
         os.rename('watermeter.py', 'watermeter.py.bak')
+    if 'main.mpy' in files:
+        os.rename('main.mpy', 'watermeter.mpy')
     if 'main.py' in files:
         os.rename('main.py', 'watermeter.py')
     yield from picoweb.jsonify(resp, {'msg': 'uninstalled watermeter app. please reboot'})
 
 def install_and_reboot():
     import os
-    os.rename('watermeter.py', 'main.py')
+    files = os.listdir()
+    if 'watermeter.py' in files:
+        os.rename('watermeter.py', 'main.py')
+    if 'watermeter.mpy' in files:
+        os.rename('watermeter.py', 'main.mpy')
+        try:
+            os.remove('watermeter.py')
+        except Exception:
+            pass
     reset()
 
 def initconfig(ssid=None, password=None, use_oled=None):
