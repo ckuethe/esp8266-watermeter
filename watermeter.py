@@ -276,28 +276,20 @@ def no_metric(req, resp):
 
 @app.route("/uninstall")
 def uninstall(req, resp):
-    import os
-    files = os.listdir()
-    if 'watermeter.py' in files:
-        os.rename('watermeter.py', 'watermeter.py.bak')
-    if 'main.mpy' in files:
-        os.rename('main.mpy', 'watermeter.mpy')
-    if 'main.py' in files:
-        os.rename('main.py', 'watermeter.py')
-    yield from picoweb.jsonify(resp, {'msg': 'uninstalled watermeter app. please reboot'})
+    msg = 'uninstalled watermeter app.'
+    try:
+        os.remove('main.py')
+    except Exception as e:
+        msg = 'caught exception: {}'.format(str(e))
+    yield from picoweb.jsonify(resp, {'msg': msg})
 
-def install_and_reboot():
-    import os
-    files = os.listdir()
-    if 'watermeter.py' in files:
-        os.rename('watermeter.py', 'main.py')
-    if 'watermeter.mpy' in files:
-        os.rename('watermeter.py', 'main.mpy')
-        try:
-            os.remove('watermeter.py')
-        except Exception:
-            pass
-    reset()
+@app.route("/install")
+def install():
+    msg = 'install failed'
+    with open('main.py', 'w') as fd:
+        rv = fd.write('import watermeter\nwatermeter.main()\n')
+        msg = 'install success'
+    yield from picoweb.jsonify(resp, {'msg': msg})
 
 def initconfig(ssid=None, password=None, use_oled=None):
     global state
