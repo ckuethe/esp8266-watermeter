@@ -35,6 +35,17 @@ state = {
 }
 
 
+# Make sure the usage directory exists
+d = 'usage'
+try:
+    s = os.stat(d)
+    if s[0] & 0x4000 != 0x4000:
+        os.remove(d)
+        os.mkdir(d)
+except OSError:
+    os.mkdir(d)
+
+
 # Create a station interface and activate it. It'll be used for the device
 # advertisement broadcast. Just in case there was a previous AP configuration
 # drop that interface
@@ -106,7 +117,9 @@ def load_state():
         logger.debug('bootstrapped clock to %s', str(state['last_save_time']))
 
     try:
-        with open('watermeter.json', 'r') as fd:
+        fname = 'usage/{}'.format(sorted(os.listdir('usage'))[-1])
+        logger.debug('loading {}'.format(fname))
+        with open(fname, 'r') as fd:
             tmp = json.load(fd)
             for k,v in tmp.items():
                 logger.debug('restored %s = %s', k, v)
@@ -136,14 +149,10 @@ def save_state():
 
     state['last_save_time'] = time.localtime()
     state['usage'] = pulse_ctr
-    try:
-        fd = open('watermeter.json.tmp', 'w')
+    fname = 'usage/{:04d}{:02d}{:02d}{:02d}{:02d}{:02d}'.format(*state['last_save_time'])
+    logger.debug('saving to {}'.format(fname))
+    with open(fname, 'w') as fd:
         json.dump(state, fd)
-        fd.close()
-        os.rename('watermeter.json.tmp', 'watermeter.json')
-        logger.debug('saved data')
-    except Exception:
-        pass
 
 def data_sync(_=None):
     logger.debug('auto sync')
@@ -275,7 +284,7 @@ def no_metric(req, resp):
     yield from picoweb.jsonify(resp, {'metric': False})
 
 @app.route("/uninstall")
-def uninstall(req, resp):
+def uninstall(req=None, resp=None):
     msg = 'uninstalled watermeter app.'
     try:
         os.remove('main.py')
@@ -284,7 +293,7 @@ def uninstall(req, resp):
     yield from picoweb.jsonify(resp, {'msg': msg})
 
 @app.route("/install")
-def install():
+def install(req=None, resp=None):
     msg = 'install failed'
     with open('main.py', 'w') as fd:
         rv = fd.write('import watermeter\nwatermeter.main()\n')
