@@ -1,12 +1,12 @@
 # vim: tabstop=4:softtabstop=4:shiftwidth=4:expandtab:
 from network import WLAN, STA_IF, AP_IF
+from btree import open as db_open
 from ntptime import settime as ntp_settime
 from machine import Pin, I2C, Timer, RTC, WDT, reset, freq
 import usocket as socket
 import time
 import picoweb
 import logging
-import json
 import os
 
 led_pin = None
@@ -27,23 +27,12 @@ gal_to_l = 3.78541
 # FL-308 = 1.28 mlpp
 
 state = {
-    'last_save_time': (2018,11,22, 12,0,0,0, 0),  # when the data was last saved
+    'last_save_time': (2018,12,21, 0,0,0,0, 0),  # when the data was last saved
     'ml_per_pulse': 1.5,    # calibration
     'metric': True,         # report in metric or imperial units
     'usage': 0,             # pulses
     'indicator': None,      # [None, 'blink', 'oled']
 }
-
-
-# Make sure the usage directory exists
-d = 'usage'
-try:
-    s = os.stat(d)
-    if s[0] & 0x4000 != 0x4000:
-        os.remove(d)
-        os.mkdir(d)
-except OSError:
-    os.mkdir(d)
 
 
 # Create a station interface and activate it. It'll be used for the device
@@ -106,6 +95,25 @@ def ntp_sync(_=None):
         logger.warning('NTP Sync failed: %s', e)
         return False
 
+def serialize_localtime(t=None):
+    # Convert a time tuple into a bytes() object as require by btree
+    if t is None:
+        t = time.localtime()
+    return ' '.join(map(str, t))
+
+def deserialize_localtime(t=None):
+    # Convert a string representation of a time tuple into a tuple
+    if t is None:
+        return None
+    try:
+        t = tuple(map(int, t.split()))
+        if len(t) != 8:
+            return None
+        return t
+    except Exception as e:
+        logger.warning('error in deserialize_localtime: %s', e)
+        return None
+
 def load_state():
     global state
     global pulse_ctr
@@ -116,57 +124,79 @@ def load_state():
         rtc.datetime(state['last_save_time'])
         logger.debug('bootstrapped clock to %s', str(state['last_save_time']))
 
+    fd = open('watermeter.db', 'r+b')
+    db = db_open(fd, pagesize=1024)
+    logger.debug('opened database')
+
+    # update the default state with any saved state (which might be null)
+    for k,v in db.items():
+        k = k.decode('utf-8')
+        v = v.decode('utf-8')
+        logger.info('restored %s = %s', k, v)
+        if k in ['usage']:
+            state[k] = int(v)
+        elif k in ['metric']:
+            state[k] = (v.lower().strip() == 'true')
+        elif k in ['ml_per_pulse']:
+            state[k] = float(v)
+        elif k in ['indicator']:
+            if v is not None:
+                state[k] = 'oled' if v == 'oled' else 'blink'
+        else:
+            state[k] = v
+
     try:
-        fname = 'usage/{}'.format(sorted(os.listdir('usage'))[-1])
-        logger.debug('loading {}'.format(fname))
-        with open(fname, 'r') as fd:
-            tmp = json.load(fd)
-            for k,v in tmp.items():
-                logger.debug('restored %s = %s', k, v)
-                if k in ['usage']:
-                    state[k] = int(v)
-                elif k in ['ml_per_pulse']:
-                    state[k] = float(v)
-                elif k in ['indicator']:
-                    if v is not None:
-                        state[k] = 'oled' if v == 'oled' else 'blink'
-                else:
-                    state[k] = v
-
-        pulse_ctr = state['usage']
-    except Exception:
-        # catches JSON parse failures from empty or nonexistent files,
-        # unexpected structure, failed conversions...
+        if isinstance(state['last_save_time'], str):
+            state['last_save_time'] = deserialize_localtime(state['last_save_time'])
+    except Exception as e:
+        logger.warning('error in load_state: %s', e)
         pass
+    pulse_ctr = state['usage']
 
-    if time.time() < time.mktime(state['last_save_time']):
-        rtc.datetime(state['last_save_time'])
-        logger.debug('updated clock to %s', str(state['last_save_time']))
+    # we're done with the database for now
+    db.flush()
+    db.close()
+    fd.close()
+
+    try:
+        if time.time() < time.mktime(state['last_save_time']):
+            rtc.datetime(state['last_save_time'])
+            logger.debug('updated clock to %s', str(state['last_save_time']))
+    except Exception:
+        pass
 
 def save_state():
     global state
     global pulse_ctr
 
-    state['last_save_time'] = time.localtime()
     state['usage'] = pulse_ctr
-    fname = 'usage/{:04d}{:02d}{:02d}{:02d}{:02d}{:02d}'.format(*state['last_save_time'])
-    logger.debug('saving to {}'.format(fname))
-    with open(fname, 'w') as fd:
-        json.dump(state, fd)
+    fd = open('watermeter.db', 'r+b')
+    db = db_open(fd, pagesize=1024)
+    logger.debug('opened database')
+    state['last_save_time'] = serialize_localtime()
+    for k,v in state.items():
+        logger.debug('saved %s = %s', k, v)
+        db[k] = str(v)
+    db.flush()
+    db.close()
+    fd.close()
+    logger.debug('saved database')
+    state['last_save_time'] = time.localtime()
+
 
 def data_sync(_=None):
     logger.debug('auto sync')
     if pulse_ctr == state['usage']:
         logger.debug('no sync needed')
         return
-    if time.time() - time.mktime(state['last_save_time']) >= 60:
+    if time.time() - time.mktime(state['last_save_time']) >= 600:
         save_state()
     else:
         logger.debug('not yet time to sync')
 
 
 def pulse_handler(_=None):
-    # increment the pulse counter 
+    # increment the pulse counter
     global pulse_ctr
     global led_pin
     pulse_ctr += 1
@@ -224,7 +254,7 @@ def show_config(req, resp):
         v /= gal_to_l
 
     msg = {
-        'timestamp': t, 
+        'timestamp': t,
         'unit': u,
         'volume': v,
         'pulses': pulse_ctr,
@@ -300,10 +330,46 @@ def install(req=None, resp=None):
         msg = 'install success'
     yield from picoweb.jsonify(resp, {'msg': msg})
 
-def initconfig(ssid=None, password=None, use_oled=None):
+def initconfig(**kwargs):
+    '''
+    Parameters
+        ssid (str): Wifi Name
+        password (str): Wifi password if required
+        hostname (str): custom hostname, rather than "ESP_%06X"
+        use_oled (bool): use OLED display if available
+        k (float): calibration constant, ml/pulse
+        pulses (int): a positive integer, used for loading previous measurements
+
+    '''
     global state
+    global pulse_ctr
     global oled
-    if use_oled is None:
+
+    if kwargs.get('pulses', None):
+        try:
+            n = int(kwargs['pulses'])
+            if n > 0:
+                pulse_ctr = n
+        except Exception:
+            pass
+
+    if kwargs.get('k', None):
+        try:
+            n = float(kwargs['k'])
+            if n > 0:
+                state['ml_per_pulse'] = n
+        except Exception:
+            pass
+
+    if kwargs.get('hostname', None):
+        if len(kwargs['hostname'].strip()):
+            state['hostname'] = kwargs['hostname'].strip()
+            net.config(dhcp_hostname=state['hostname'])
+            net.active(False)
+            net.active(True)
+
+    use_oled = False
+    if kwargs.get('use_oled', None) is None:
         tmp = input("Use OLED [N]/y? ").lower().strip()
         if tmp in ['y', 'yes', 't', 'true', 1, '1']:
             use_oled = True
@@ -317,12 +383,20 @@ def initconfig(ssid=None, password=None, use_oled=None):
         oled.text("ESP8266 WiFi", 0, 8)
         oled.text("Water  Meter", 0, 16)
         oled.show()
+    else:
+        state['indicator'] = 'blink'
 
-    if ssid is None:
+    ssid = None
+    password = None
+    if kwargs.get('ssid', None) is None:
         ssid = input('SSID? ')
         password = input('Password? ')
         if password == '':
             password = None
+    else:
+        ssid = kwargs['ssid']
+        password = kwargs['password']
+
     if ssid:
         net.connect(ssid, password)
     else:
@@ -348,7 +422,17 @@ def initconfig(ssid=None, password=None, use_oled=None):
         logger.info('DHCP configuration failed')
 
     save_state()
-        
+
+def dbx():
+    f = 'watermeter.db'
+    sz = os.stat(f)[6]
+    fd = open('watermeter.db', 'r+b')
+    db = db_open(fd, pagesize=1024)
+    for k,v in db.items():
+        print('{}: {}'.format(k,v))
+    db.close()
+    fd.close()
+
 def ms(s=None, m=None, h=None):
     t = 0
     if s is not None:
