@@ -450,9 +450,6 @@ def main(debug=0):
 
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
-    logger.debug('going faster!')
-    freq(160_000_000)
-
     time.sleep(2)  # give the wifi time to connect
 
     logger.debug('starting NTP task')
