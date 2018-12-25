@@ -11,6 +11,7 @@ import os
 
 led_pin = None
 oled = None
+dbf = 'watermeter.db'
 
 logger = logging.Logger('watermeter')
 
@@ -124,8 +125,11 @@ def load_state():
         rtc.datetime(state['last_save_time'])
         logger.debug('bootstrapped clock to %s', str(state['last_save_time']))
 
-    fd = open('watermeter.db', 'r+b')
-    db = db_open(fd, pagesize=1024)
+    try:
+        fd = open(dbf, 'r+b')
+    except OSError:
+        fd = open(dbf, 'w+b')
+    db = db_open(fd, pagesize=512, cachesize=512)
     logger.debug('opened database')
 
     # update the default state with any saved state (which might be null)
@@ -170,8 +174,11 @@ def save_state():
     global pulse_ctr
 
     state['usage'] = pulse_ctr
-    fd = open('watermeter.db', 'r+b')
-    db = db_open(fd, pagesize=1024)
+    try:
+        fd = open(dbf, 'r+b')
+    except OSError:
+        fd = open(dbf, 'w+b')
+    db = db_open(fd, pagesize=512, cachesize=512)
     logger.debug('opened database')
     state['last_save_time'] = serialize_localtime()
     for k,v in state.items():
@@ -320,6 +327,9 @@ def uninstall(req=None, resp=None):
         os.remove('main.py')
     except Exception as e:
         msg = 'caught exception: {}'.format(str(e))
+    if req is None or resp is None:
+        print(msg)
+        return
     yield from picoweb.jsonify(resp, {'msg': msg})
 
 @app.route("/install")
@@ -328,6 +338,9 @@ def install(req=None, resp=None):
     with open('main.py', 'w') as fd:
         rv = fd.write('import watermeter\nwatermeter.main(1)\n')
         msg = 'install success'
+    if req is None or resp is None:
+        print(msg)
+        return msg
     yield from picoweb.jsonify(resp, {'msg': msg})
 
 def initconfig(**kwargs):
@@ -423,11 +436,26 @@ def initconfig(**kwargs):
 
     save_state()
 
+def dbw(**kwargs):
+    try:
+        fd = open(dbf, 'r+b')
+    except OSError:
+        fd = open(dbf, 'w+b')
+    db = db_open(fd, pagesize=512, cachesize=512)
+    for i in kwargs:
+        print('set {}="{}"'.format(i, kwargs[i]))
+        db[i] = kwargs[i]
+    db.close()
+    fd.close()
+
 def dbx():
-    f = 'watermeter.db'
-    sz = os.stat(f)[6]
-    fd = open('watermeter.db', 'r+b')
-    db = db_open(fd, pagesize=1024)
+    try:
+        fd = open(dbf, 'r+b')
+    except OSError:
+        fd = open(dbf, 'w+b')
+    sz = os.stat(dbf)[6]
+    print(dbf, " size ", sz)
+    db = db_open(fd, pagesize=512, cachesize=512)
     for k,v in db.items():
         print('{}: {}'.format(k,v))
     db.close()
@@ -449,6 +477,7 @@ def main(debug=0):
     global oled
 
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    load_state()
 
     for i in range(30):
         logger.debug('waiting for network')
@@ -459,14 +488,13 @@ def main(debug=0):
     logger.debug('starting NTP task')
     ntp_sync()
     ntp_timer = Timer(-1)
-    ntp_timer.init(period=ms(m=7), mode=Timer.PERIODIC, callback=ntp_sync)
+    ntp_timer.init(period=ms(m=5), mode=Timer.PERIODIC, callback=ntp_sync)
 
     logger.debug('starting device announcement task')
     send_adv_msg()
     adv_timer = Timer(-1)
     adv_timer.init(period=ms(m=1), mode=Timer.PERIODIC, callback=send_adv_msg)
 
-    load_state()
     save_state()
 
     doggo = WDT()
