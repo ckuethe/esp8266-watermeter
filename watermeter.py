@@ -326,7 +326,7 @@ def uninstall(req=None, resp=None):
 def install(req=None, resp=None):
     msg = 'install failed'
     with open('main.py', 'w') as fd:
-        rv = fd.write('import watermeter\nwatermeter.main()\n')
+        rv = fd.write('import watermeter\nwatermeter.main(1)\n')
         msg = 'install success'
     yield from picoweb.jsonify(resp, {'msg': msg})
 
