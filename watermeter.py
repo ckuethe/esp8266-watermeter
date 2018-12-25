@@ -450,7 +450,11 @@ def main(debug=0):
 
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
-    time.sleep(2)  # give the wifi time to connect
+    for i in range(30):
+        logger.debug('waiting for network')
+        time.sleep(2)  # give the wifi time to connect
+        if net.isconnected():
+            break
 
     logger.debug('starting NTP task')
     ntp_sync()
