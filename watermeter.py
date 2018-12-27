@@ -1,6 +1,6 @@
 # vim: tabstop=4:softtabstop=4:shiftwidth=4:expandtab:
 from network import WLAN, STA_IF, AP_IF
-from btree import open as db_open
+import btree
 from ntptime import settime as ntp_settime
 from machine import Pin, I2C, Timer, RTC, WDT, reset, freq
 import usocket as socket
@@ -115,6 +115,16 @@ def deserialize_localtime(t=None):
         logger.warning('error in deserialize_localtime: %s', e)
         return None
 
+def dbopen():
+    # I do this enough that I should just write a wrapper. #DontRepeatYourself
+    try:
+        fd = open(dbf, 'r+b')
+    except OSError:
+        fd = open(dbf, 'w+b')
+    db = btree.open(fd, pagesize=512, cachesize=512)
+    logger.debug('opened database')
+    return db
+
 def load_state():
     global state
     global pulse_ctr
@@ -125,14 +135,8 @@ def load_state():
         rtc.datetime(state['last_save_time'])
         logger.debug('bootstrapped clock to %s', str(state['last_save_time']))
 
-    try:
-        fd = open(dbf, 'r+b')
-    except OSError:
-        fd = open(dbf, 'w+b')
-    db = db_open(fd, pagesize=512, cachesize=512)
-    logger.debug('opened database')
-
     # update the default state with any saved state (which might be null)
+    db = dbopen()
     for k,v in db.items():
         k = k.decode('utf-8')
         v = v.decode('utf-8')
@@ -174,11 +178,7 @@ def save_state():
     global pulse_ctr
 
     state['usage'] = pulse_ctr
-    try:
-        fd = open(dbf, 'r+b')
-    except OSError:
-        fd = open(dbf, 'w+b')
-    db = db_open(fd, pagesize=512, cachesize=512)
+    db = dbopen()
     logger.debug('opened database')
     state['last_save_time'] = serialize_localtime()
     for k,v in state.items():
@@ -437,11 +437,7 @@ def initconfig(**kwargs):
     save_state()
 
 def dbw(**kwargs):
-    try:
-        fd = open(dbf, 'r+b')
-    except OSError:
-        fd = open(dbf, 'w+b')
-    db = db_open(fd, pagesize=512, cachesize=512)
+    db = dbopen()
     for i in kwargs:
         print('set {}="{}"'.format(i, kwargs[i]))
         db[i] = kwargs[i]
@@ -449,13 +445,9 @@ def dbw(**kwargs):
     fd.close()
 
 def dbx():
-    try:
-        fd = open(dbf, 'r+b')
-    except OSError:
-        fd = open(dbf, 'w+b')
+    db = dbopen()
     sz = os.stat(dbf)[6]
     print(dbf, " size ", sz)
-    db = db_open(fd, pagesize=512, cachesize=512)
     for k,v in db.items():
         print('{}: {}'.format(k,v))
     db.close()
