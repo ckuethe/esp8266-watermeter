@@ -152,7 +152,7 @@ def setup_oled(bus):
 
     # h=64 works on a 0.96" big lcd, h=32 is for a 0.91" small one, but
     # using h=32 on a big LCD can be used to create a double height font
-    return SSD1306_I2C(128, 64, bus)
+    return SSD1306_I2C(128, 32, bus)
 
 def oled_output(_=None):
     doggo_treats() # just in case the OLED is slow
