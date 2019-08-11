@@ -220,16 +220,29 @@ def calibrate(req, resp):
     rv['k'] = k
     rv['pulses'] = n
     if k:
-        state['ml_per_pulse'] = float(k[0])
-        rv['updated'] = True
-    elif v and k:
         try:
-            state['ml_per_pulse'] = float(v[0])/float(n[0])
-            rv['updated'] = True
-        except ZeroDivisionError:
-            pass
+            k = float(k)
+            if k > 0.0:
+                state['ml_per_pulse'] = k
+                rv['updated'] = True
+            else:
+                rv['msg'] = "Calibration constant must be greater than 0.0"
+        except ValueError:
+            rv['msg'] = "unable to process argument"
+    elif v and n:
+        try:
+            v = float(v)
+            n = float(n)
+            if v > 0.0 and n > 0.0:
+                state['ml_per_pulse'] = v/n
+                rv['updated'] = True
+            else:
+                rv['msg'] = "Calibration constant must be greater than 0.0"
+        except ValueError:
+            rv['msg'] = "unable to process argument"
     else:
         rv['msg'] = "Must supply either 'k' or 'mls' and 'pulses' parameters to change calibration"
+    #rv['ml_per_pulse'] = '{:.2f}'.format(state['ml_per_pulse'])
     rv['ml_per_pulse'] = state['ml_per_pulse']
     if rv['updated']:
         save_state()
