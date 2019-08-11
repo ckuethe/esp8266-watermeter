@@ -8,10 +8,12 @@ import time
 import picoweb
 import logging
 import os
+from db import DB_fram as DB
 
 led_pin = None
 oled = None
-dbf = 'watermeter.db'
+bus = I2C(sda=Pin(5), scl=Pin(4))
+dbh = DB(bus=bus)
 
 logger = logging.Logger('watermeter')
 
@@ -65,6 +67,7 @@ def calculate_broadcast(ip, nm):
 
 def send_adv_msg(_=None):
     global ip
+    global port
     i = net.ifconfig()
     ip = i[0]
     dst = calculate_broadcast(ip, i[1])
@@ -96,35 +99,6 @@ def ntp_sync(_=None):
         logger.warning('NTP Sync failed: %s', e)
         return False
 
-def serialize_localtime(t=None):
-    # Convert a time tuple into a bytes() object as require by btree
-    if t is None:
-        t = time.localtime()
-    return ' '.join(map(str, t))
-
-def deserialize_localtime(t=None):
-    # Convert a string representation of a time tuple into a tuple
-    if t is None:
-        return None
-    try:
-        t = tuple(map(int, t.split()))
-        if len(t) != 8:
-            return None
-        return t
-    except Exception as e:
-        logger.warning('error in deserialize_localtime: %s', e)
-        return None
-
-def dbopen():
-    # I do this enough that I should just write a wrapper. #DontRepeatYourself
-    try:
-        fd = open(dbf, 'r+b')
-    except OSError:
-        fd = open(dbf, 'w+b')
-    db = btree.open(fd, pagesize=512, cachesize=512)
-    logger.debug('opened database')
-    return db
-
 def load_state():
     global state
     global pulse_ctr
@@ -135,58 +109,15 @@ def load_state():
         rtc.datetime(state['last_save_time'])
         logger.debug('bootstrapped clock to %s', str(state['last_save_time']))
 
-    # update the default state with any saved state (which might be null)
-    db = dbopen()
-    for k,v in db.items():
-        k = k.decode('utf-8')
-        v = v.decode('utf-8')
-        logger.info('restored %s = %s', k, v)
-        if k in ['usage']:
-            state[k] = int(v)
-        elif k in ['metric']:
-            state[k] = (v.lower().strip() == 'true')
-        elif k in ['ml_per_pulse']:
-            state[k] = float(v)
-        elif k in ['indicator']:
-            if v is not None:
-                state[k] = 'oled' if v == 'oled' else 'blink'
-        else:
-            state[k] = v
-
-    try:
-        if isinstance(state['last_save_time'], str):
-            state['last_save_time'] = deserialize_localtime(state['last_save_time'])
-    except Exception as e:
-        logger.warning('error in load_state: %s', e)
-        pass
+    state = dbh.load()
     pulse_ctr = state['usage']
-
-    # we're done with the database for now
-    db.flush()
-    db.close()
-    fd.close()
-
-    try:
-        if time.time() < time.mktime(state['last_save_time']):
-            rtc.datetime(state['last_save_time'])
-            logger.debug('updated clock to %s', str(state['last_save_time']))
-    except Exception:
-        pass
 
 def save_state():
     global state
     global pulse_ctr
 
     state['usage'] = pulse_ctr
-    db = dbopen()
-    logger.debug('opened database')
-    state['last_save_time'] = serialize_localtime()
-    for k,v in state.items():
-        logger.debug('saved %s = %s', k, v)
-        db[k] = str(v)
-    db.flush()
-    db.close()
-    fd.close()
+    dbh.save(state)
     logger.debug('saved database')
     state['last_save_time'] = time.localtime()
 
@@ -211,7 +142,7 @@ def pulse_handler(_=None):
     if led_pin:
         led_pin.value(led_pin.value()^1)
 
-def setup_oled():
+def setup_oled(bus):
     from ssd1306 import SSD1306_I2C
     # this assumes a particular board.
 
@@ -219,8 +150,9 @@ def setup_oled():
     p_rst.off()
     p_rst.on()
 
-    bus = I2C(sda=Pin(4), scl=Pin(5))
-    return SSD1306_I2C(128, 32, bus)
+    # h=64 works on a 0.96" big lcd, h=32 is for a 0.91" small one, but
+    # using h=32 on a big LCD can be used to create a double height font
+    return SSD1306_I2C(128, 64, bus)
 
 def oled_output(_=None):
     doggo_treats() # just in case the OLED is slow
@@ -233,8 +165,8 @@ def oled_output(_=None):
 
     t = time.localtime()
     oled.fill(0)
-    oled.text("{:02d}/{:02d} {:02d}:{:02d}:{:02d}".format(t[1], t[2], t[3], t[4], t[5]), 0, 0)
-    oled.text("{}".format(ip), 0, 8)
+    oled.text("{}".format(ip), 0, 0)
+    oled.text("{:02d}/{:02d} {:02d}:{:02d}:{:02d}".format(t[1], t[2], t[3], t[4], t[5]), 0, 8)
     oled.text("{:.1f} {}".format(v, u), 0, 16)
     oled.show()
 
@@ -357,6 +289,7 @@ def initconfig(**kwargs):
     global state
     global pulse_ctr
     global oled
+    global bus
 
     if kwargs.get('pulses', None):
         try:
@@ -375,11 +308,14 @@ def initconfig(**kwargs):
             pass
 
     if kwargs.get('hostname', None):
-        if len(kwargs['hostname'].strip()):
+        tmp = input('hostname?').lower().strip()
+    if len(kwargs['hostname']):
             state['hostname'] = kwargs['hostname'].strip()
             net.config(dhcp_hostname=state['hostname'])
             net.active(False)
             net.active(True)
+    else:
+        state['hostname'] = ''
 
     use_oled = False
     if kwargs.get('use_oled', None) is None:
@@ -391,13 +327,13 @@ def initconfig(**kwargs):
 
     if use_oled == True:
         state['indicator'] = 'oled'
-        oled = setup_oled()
+        oled = setup_oled(bus)
         oled.fill(0)
         oled.text("ESP8266 WiFi", 0, 8)
         oled.text("Water  Meter", 0, 16)
         oled.show()
     else:
-        state['indicator'] = 'blink'
+        state['indicator'] = 'blnk'
 
     ssid = None
     password = None
@@ -436,23 +372,6 @@ def initconfig(**kwargs):
 
     save_state()
 
-def dbw(**kwargs):
-    db = dbopen()
-    for i in kwargs:
-        print('set {}="{}"'.format(i, kwargs[i]))
-        db[i] = kwargs[i]
-    db.close()
-    fd.close()
-
-def dbx():
-    db = dbopen()
-    sz = os.stat(dbf)[6]
-    print(dbf, " size ", sz)
-    for k,v in db.items():
-        print('{}: {}'.format(k,v))
-    db.close()
-    fd.close()
-
 def ms(s=None, m=None, h=None):
     t = 0
     if s is not None:
@@ -467,6 +386,8 @@ def main(debug=0):
     global doggo
     global led_pin
     global oled
+    global dbh
+    global bus
 
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
     load_state()
@@ -489,12 +410,15 @@ def main(debug=0):
 
     save_state()
 
+    logger.debug('starting watchdog task')
     doggo = WDT()
+    wd_timer = Timer(-1)
+    wd_timer.init(period=ms(s=1), mode=Timer.PERIODIC, callback=doggo_treats)
 
     dpin = 4 # D2
     if state['indicator'] == 'oled':
         logger.debug('starting OLED task')
-        oled = setup_oled()
+        oled = setup_oled(bus)
         oled_output()
         oled_timer = Timer(-1)
         oled_timer.init(period=ms(s=1), mode=Timer.PERIODIC, callback=oled_output)
@@ -502,9 +426,6 @@ def main(debug=0):
     else:
         logger.debug('using LED blinks')
         led_pin = Pin(2, Pin.OUT, value=1)
-        logger.debug('starting watchdog task')
-        wd_timer = Timer(-1)
-        wd_timer.init(period=ms(s=1), mode=Timer.PERIODIC, callback=doggo_treats)
 
     logger.debug('starting data sync task')
     save_timer = Timer(-1)
