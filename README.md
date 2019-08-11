@@ -10,15 +10,21 @@ water filter to know when the filter media should be changed.
 Pretty simple, really. Take one NodeMCU, connect the 3.3V regulated output
 pin to Vcc (red wire) on a hall effect sensor. Ground pin to GND (black wire).
 GPIO4 (it happens to be D2 on my board) to OUT (yellow wire) on the sensor.
+Finally, add an I2C memory (persisting state to on-board flash is a great way
+to wreck your device... says the voice of bitter experience).
 
 That's it.
 
 The circuit toggles one of the on-board LEDs whenever a pulse arrives from
 the sensor but that's purely eye-candy.
 
-![Actual Device](https://raw.githubusercontent.com/ckuethe/esp8266-watermeter/master/device.jpg)
+![Basic Device](https://raw.githubusercontent.com/ckuethe/esp8266-watermeter/master/device.jpg)
 
 ![Schematic](https://raw.githubusercontent.com/ckuethe/esp8266-watermeter/master/schematic.jpg)
+
+If you want to get fancy, you can add an I2C display.
+
+![Fancy Board](https://raw.githubusercontent.com/ckuethe/esp8266-watermeter/master/board.jpg)
 
 ## Firmware
 The watermeter is based on micropython with a customized set of frozen
@@ -72,10 +78,11 @@ Network Advertisement:
 
 #### Added Modules
 
-- logging
+- logging / ulogging
 - picoweb
 - pkg_resources
 - uasyncio
+- ssd1306
 
 
 ## JSON API
