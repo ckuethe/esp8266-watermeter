@@ -242,7 +242,6 @@ def calibrate(req, resp):
             rv['msg'] = "unable to process argument"
     else:
         rv['msg'] = "Must supply either 'k' or 'mls' and 'pulses' parameters to change calibration"
-    #rv['ml_per_pulse'] = '{:.2f}'.format(state['ml_per_pulse'])
     rv['ml_per_pulse'] = state['ml_per_pulse']
     if rv['updated']:
         save_state()
