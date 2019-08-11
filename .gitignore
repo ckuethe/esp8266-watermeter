@@ -2,3 +2,7 @@
 *.pyc
 __pycache__
 *.backup
+*.dat
+*.db
+*.json
+*.old
