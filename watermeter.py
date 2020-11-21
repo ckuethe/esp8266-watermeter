@@ -1,11 +1,11 @@
 # vim: tabstop=4:softtabstop=4:shiftwidth=4:expandtab:
-from network import WLAN, STA_IF, AP_IF
-import btree
-from ntptime import settime as ntp_settime
-from machine import Pin, I2C, Timer, RTC, WDT, reset, freq
-import usocket as socket
+from network import WLAN, STA_IF, AP_IF  # pylint: disable=import-error
+import btree  # pylint: disable=import-error
+from ntptime import settime as ntp_settime  # pylint: disable=import-error
+from machine import Pin, I2C, Timer, RTC, WDT, reset, freq  # pylint: disable=import-error
+import usocket as socket  # pylint: disable=import-error
 import time
-import picoweb
+import picoweb  # pylint: disable=import-error
 import logging
 import os
 from db import DB_fram as DB
@@ -292,7 +292,7 @@ def uninstall(req=None, resp=None):
 def install(req=None, resp=None):
     msg = "install failed"
     with open("main.py", "w") as fd:
-        rv = fd.write("import watermeter\nwatermeter.main(1)\n")
+        fd.write("import watermeter\nwatermeter.main(1)\n")
         msg = "install success"
     if req is None or resp is None:
         print(msg)
@@ -419,7 +419,7 @@ def main(debug=0):
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
     load_state()
 
-    for i in range(30):
+    for _ in range(30):
         logger.debug("waiting for network")
         time.sleep(2)  # give the wifi time to connect
         if net.isconnected():
@@ -459,7 +459,7 @@ def main(debug=0):
     save_timer.init(period=ms(m=5), mode=Timer.PERIODIC, callback=data_sync)
 
     data_pin = Pin(dpin, Pin.IN, Pin.PULL_UP)
-    data_irq = data_pin.irq(trigger=Pin.IRQ_FALLING, handler=pulse_handler)
+    _data_irq = data_pin.irq(trigger=Pin.IRQ_FALLING, handler=pulse_handler)
 
     logger.info("starting watermeter app")
     app.run(debug=debug, port=port, host="0.0.0.0")
